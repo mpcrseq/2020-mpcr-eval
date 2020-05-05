@@ -1,3 +1,15 @@
+---
+output:
+  html_document:
+    fig_width: 8
+    fig_height: 6
+  md_document:
+    fig_width: 8
+    fig_height: 6
+fig_width: 8 
+fig_height: 6
+cache: TRUE
+---
 # mpcrseq exploratory
 
 Import data and join amplicon size data with genotyping data.
@@ -418,6 +430,7 @@ ggplot(snp_data, aes(x = r_gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle
 ```
 
 ![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13-3.png)
+
 
 ```r
 glm8 <- glmer(called ~ f_gc_clamp + r_gc_clamp + f_gc_3prime + r_gc_3prime + (1|sample) + (1|snp_id), data = vcf, family = binomial )
