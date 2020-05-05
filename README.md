@@ -296,6 +296,10 @@ ggplot(snp_data, aes(x = pcr1_product, y = call_rate)) + geom_point() + geom_smo
 
 ```r
 ggplot(snp_data, aes(x = pcr1_product, y = meanDP)) + geom_point() + ylab("Mean depth") + xlab("PCR 1 product size")
+
+
+glm1 <- glmer(called ~ I(scale(pcr1_product)) + (1|sample), family = binomial, data = vcf)
+summary(glm1)
 ```
 
 ![plot of chunk unnamed-chunk-9](figure/unnamed-chunk-9-1.png)

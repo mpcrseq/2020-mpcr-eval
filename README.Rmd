@@ -59,7 +59,7 @@ snp_data <- vcf %>%
   group_by(snp_id, CHROM, REF, ALT, template_size, pcr1_product, pcr2_product, gc_clamp, gc_3prime, f_gc_clamp, r_gc_clamp, f_gc_3prime, r_gc_3prime) %>% 
   summarize(n_called = sum(called), n = n(), call_rate = n_called/n, AD1 = sum(AD1),
 	          AD2 = sum(AD2), totalDP = sum(DP), meanDP = mean(DP), medianDP = median(DP),
-						paa = sum(gt == 0) / n(), pAa = sum(gt == 1) / n(), pAA = sum(gt == 2) / n())
+						paa = sum(gt == 0 & called) / n_called, pAa = sum(gt == 1 & called) /  n_called, pAA = sum(gt == 2 & called) /  n_called)
 
 
 # Minor allele frequency
@@ -161,6 +161,9 @@ ggplot(snp_data, aes(x = maf, y = call_rate)) + geom_point()
 
 ```{r}
 ggplot(snp_data, aes(x = pcr1_product, y = call_rate)) + geom_point() + geom_smooth(method = "lm") + xlab("PCR 1 product size") + ylab("Call rate")
+
+glm1 <- glmer(called ~ I(scale(pcr1_product)) + (1|sample), family = binomial, data = vcf)
+summary(glm1)
 
 ```
 
