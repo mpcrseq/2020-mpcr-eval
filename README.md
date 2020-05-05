@@ -158,7 +158,7 @@ snp_data <- vcf %>%
   group_by(snp_id, CHROM, REF, ALT, template_size, pcr1_product, pcr2_product, gc_clamp, gc_3prime, f_gc_clamp, r_gc_clamp, f_gc_3prime, r_gc_3prime) %>% 
   summarize(n_called = sum(called), n = n(), call_rate = n_called/n, AD1 = sum(AD1),
 	          AD2 = sum(AD2), totalDP = sum(DP), meanDP = mean(DP), medianDP = median(DP),
-						paa = sum(gt == 0) / n(), pAa = sum(gt == 1) / n(), pAA = sum(gt == 2) / n())
+						paa = sum(gt == 0 & called) / n_called, pAa = sum(gt == 1 & called) /  n_called, pAA = sum(gt == 2 & called) /  n_called)
 ```
 
 ```
@@ -290,16 +290,47 @@ ggplot(snp_data, aes(x = pcr1_product, y = call_rate)) + geom_point() + geom_smo
 
 ![plot of chunk unnamed-chunk-8](figure/unnamed-chunk-8-1.png)
 
+```r
+glm1 <- glmer(called ~ I(scale(pcr1_product)) + (1|sample), family = binomial, data = vcf)
+summary(glm1)
+```
+
+```
+## Generalized linear mixed model fit by maximum likelihood (Laplace Approximation) ['glmerMod']
+##  Family: binomial  ( logit )
+## Formula: called ~ I(scale(pcr1_product)) + (1 | sample)
+##    Data: vcf
+## 
+##      AIC      BIC   logLik deviance df.resid 
+##  33561.1  33586.7 -16777.5  33555.1    37797 
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -10.9097  -0.4737  -0.1357   0.4941   8.3407 
+## 
+## Random effects:
+##  Groups Name        Variance Std.Dev.
+##  sample (Intercept) 4.288    2.071   
+## Number of obs: 37800, groups:  sample, 300
+## 
+## Fixed effects:
+##                        Estimate Std. Error z value Pr(>|z|)    
+## (Intercept)            -0.16309    0.12078   -1.35    0.177    
+## I(scale(pcr1_product)) -0.44554    0.01431  -31.12   <2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Correlation of Fixed Effects:
+##             (Intr)
+## I(scl(p1_)) 0.003
+```
+
 
 ## Figure 7. PCR product size x Mean depth
 
 
 ```r
 ggplot(snp_data, aes(x = pcr1_product, y = meanDP)) + geom_point() + ylab("Mean depth") + xlab("PCR 1 product size")
-
-
-glm1 <- glmer(called ~ I(scale(pcr1_product)) + (1|sample), family = binomial, data = vcf)
-summary(glm1)
 ```
 
 ![plot of chunk unnamed-chunk-9](figure/unnamed-chunk-9-1.png)
@@ -387,3 +418,6 @@ ggplot(snp_data, aes(x = r_gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle
 ```
 
 ![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13-3.png)
+
+
+
