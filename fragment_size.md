@@ -327,8 +327,8 @@ GC clamp = TRUE if 2 or fewer GC bases in 3 prime end.
 
 
 >    Returns True if fewer than 2 G or C nucleotides are within the last 5 bases.
->    #Oligonucleotides with more than three G or C nucleotides within the last  five bases were  filtered.  This should help minimize mispriming at GC-rich binding sites
->    # http://www.bio.net/mm/methods/2000-August/084438.html
+>    Oligonucleotides with more than three G or C nucleotides within the last  five bases were  filtered.  This should help minimize mispriming at GC-rich binding sites
+>    http://www.bio.net/mm/methods/2000-August/084438.html
 
 
 
