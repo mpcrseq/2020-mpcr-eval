@@ -210,6 +210,7 @@ ggplot(snp_data, aes(x = f_gc_clamp, y = call_rate)) + geom_boxplot() + ggtitle(
 
 ggplot(snp_data, aes(x = r_gc_clamp, y = call_rate)) + geom_boxplot() + ggtitle("Reverse GC Clamp")
 
+
 ```
 
 
@@ -233,7 +234,8 @@ ggplot(snp_data, aes(x = gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle("
 ggplot(snp_data, aes(x = f_gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle("Forward GC 3prime")
 ggplot(snp_data, aes(x = r_gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle("Reverse GC 3prime")
 
-
+glm8 <- glmer(called ~ f_gc_clamp + r_gc_clamp + f_gc_3prime + r_gc_3prime + (1|sample) + (1|snp_id), data = vcf, family = binomial )
+summary(glm8)
 ```
 
 

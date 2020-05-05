@@ -419,5 +419,47 @@ ggplot(snp_data, aes(x = r_gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle
 
 ![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13-3.png)
 
+```r
+glm8 <- glmer(called ~ f_gc_clamp + r_gc_clamp + f_gc_3prime + r_gc_3prime + (1|sample) + (1|snp_id), data = vcf, family = binomial )
+summary(glm8)
+```
+
+```
+## Generalized linear mixed model fit by maximum likelihood (Laplace Approximation) ['glmerMod']
+##  Family: binomial  ( logit )
+## Formula: called ~ f_gc_clamp + r_gc_clamp + f_gc_3prime + r_gc_3prime +      (1 | sample) + (1 | snp_id)
+##    Data: vcf
+## 
+##      AIC      BIC   logLik deviance df.resid 
+##  21463.1  21522.9 -10724.5  21449.1    37793 
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -223.756   -0.220   -0.013    0.221   41.071 
+## 
+## Random effects:
+##  Groups Name        Variance Std.Dev.
+##  sample (Intercept) 12.393   3.520   
+##  snp_id (Intercept)  5.968   2.443   
+## Number of obs: 37800, groups:  sample, 300; snp_id, 126
+## 
+## Fixed effects:
+##                 Estimate Std. Error z value Pr(>|z|)  
+## (Intercept)       0.7306     0.5498   1.329   0.1839  
+## f_gc_clampTRUE   -1.1074     0.4600  -2.408   0.0161 *
+## r_gc_clampTRUE   -0.8040     0.4911  -1.637   0.1016  
+## f_gc_3primeTRUE  -0.6772     0.4704  -1.439   0.1500  
+## r_gc_3primeTRUE   0.4481     0.4935   0.908   0.3639  
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Correlation of Fixed Effects:
+##             (Intr) f__TRU r__TRU f__3TR
+## f_gc_clTRUE -0.448                     
+## r_gc_clTRUE -0.485 -0.118              
+## f_gc_3pTRUE -0.478  0.277  0.035       
+## r_gc_3pTRUE -0.518 -0.030  0.419  0.069
+```
+
 
 
