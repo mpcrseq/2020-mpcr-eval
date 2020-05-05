@@ -383,6 +383,3 @@ ggplot(snp_data, aes(x = r_gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle
 ```
 
 ![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13-3.png)
-
-
-
