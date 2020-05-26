@@ -1,15 +1,4 @@
----
-output:
-  html_document:
-    fig_width: 8
-    fig_height: 6
-  md_document:
-    fig_width: 8
-    fig_height: 6
-fig_width: 8 
-fig_height: 6
-cache: TRUE
----
+
 # mpcrseq exploratory
 
 Import data and join amplicon size data with genotyping data.
@@ -19,7 +8,7 @@ Import data and join amplicon size data with genotyping data.
 library(tidyverse)
 library(lme4)
 
-vcf	               <- read_csv("vcf_129snp_long.csv")
+vcf_129 <- read_csv("vcf_129snp_long.csv")
 ```
 
 ```
@@ -39,7 +28,75 @@ vcf	               <- read_csv("vcf_129snp_long.csv")
 ```
 
 ```r
-s1s2_product_sizes <- read_tsv("set12_product_sizes.tsv")
+vcf_av  <- read_tsv("vcf_av_snps_long.txt")
+```
+
+```
+## Parsed with column specification:
+## cols(
+##   CHROM = col_double(),
+##   POS = col_double(),
+##   REF = col_character(),
+##   ALT = col_character(),
+##   QUAL = col_double(),
+##   FORMAT = col_character(),
+##   sample = col_character(),
+##   GT = col_character(),
+##   PL = col_character(),
+##   DP = col_double(),
+##   AD = col_character(),
+##   GQ = col_double()
+## )
+```
+
+```r
+vcf_129 <- vcf_129 %>% select(CHROM, POS, REF, ALT, sample = SAMPLE_NAME_IN_RUN, GT, PL, DP, AD, GQ)
+vcf_av  <- vcf_av %>% select(CHROM, POS, REF, ALT, sample, GT, PL, DP, AD, GQ)
+vcf     <- rbind(vcf_129, vcf_av)
+
+# Separate allele depth & genotype likelihoods
+vcf <- vcf %>% separate(GT, c("GT1", "GT2"), "/", convert = TRUE, remove = FALSE) %>%
+  separate(AD, c("AD1", "AD2"), ",", convert = TRUE, remove = FALSE) %>%
+  separate(PL, c("pl00", "pl01", "pl11"), convert = TRUE, remove = FALSE) %>%
+  rowwise() %>% mutate(gt = sum(GT1, GT2))
+```
+
+```
+## Warning: Expected 2 pieces. Missing pieces filled with `NA` in 3156 rows [32, 48, 72, 81, 124, 161, 177, 201, 210, 253, 290, 306, 330, 339, 382, 419, 435, 459, 468, 511, ...].
+```
+
+```
+## Warning: Expected 3 pieces. Missing pieces filled with `NA` in 3156 rows [32, 48, 72, 81, 124, 161, 177, 201, 210, 253, 290, 306, 330, 339, 382, 419, 435, 459, 468, 511, ...].
+```
+
+```r
+# Calc. likelihood ratio
+likelihood_ratio <- function(x) {
+  y <- 10^(-x/10)
+  max(y) / (sum(y) - max(y))
+}
+
+vcf <- vcf %>% rowwise() %>% mutate(lr = likelihood_ratio(c(pl00,pl01,pl11)))
+
+
+
+
+load("run0802.RData")
+load("run1012.RData")
+
+r1 <- run0802$run_x_sample_snp_data
+r2 <- run1012$run_x_sample_snp_data
+
+r12 <- rbind(r1, r2)
+
+r12 <- r12 %>% select(CHROM = chrom, POS = stop, REF = ref, ALT = alt, sample, gt, pl00, pl01, pl11, DP = dp, gt, lr)
+
+vcf <- vcf %>% select(CHROM, POS, REF, ALT, sample, gt, pl00, pl01, pl11, DP, gt, lr)
+
+
+vcf <- rbind(r12, vcf)
+
+s1s2        <- read_tsv("set12_product_sizes.tsv")
 ```
 
 ```
@@ -56,8 +113,7 @@ s1s2_product_sizes <- read_tsv("set12_product_sizes.tsv")
 s1s2$snp_id <- gsub('-500','', s1s2$snp_id)
 
 vcf$snp_id <- paste(vcf$CHROM, vcf$POS, sep = ":")
-
-vcf <- left_join(s1s2, vcf)
+vcf        <- left_join(s1s2, vcf)
 ```
 
 ```
@@ -65,9 +121,7 @@ vcf <- left_join(s1s2, vcf)
 ```
 
 ```r
-vcf <- vcf %>% filter(!is.na(CHROM))
-
-vcf$sample <- vcf$SAMPLE_NAME_IN_RUN
+vcf        <- vcf %>% filter(!is.na(CHROM))
 
 metadata <- read_csv('big_bam_list.csv')
 ```
@@ -87,7 +141,7 @@ metadata <- read_csv('big_bam_list.csv')
 ```
 
 ```r
-vcf <- left_join(vcf, metadata)
+vcf      <- left_join(vcf, metadata)
 ```
 
 ```
@@ -95,7 +149,7 @@ vcf <- left_join(vcf, metadata)
 ```
 
 ```r
-pchar <- read_tsv('pchar.tsv')
+pchar       <- read_tsv('pchar.tsv')
 ```
 
 ```
@@ -123,67 +177,38 @@ pchar <- read_tsv('pchar.tsv')
 
 ```r
 pchar$start <- as.integer(pchar$start)
-pchar$name <- paste(pchar$chrom, pchar$start, sep = ':')
-pchar <- pchar %>% select(snp_id = name, f_gc_clamp, r_gc_clamp, f_gc_3prime, r_gc_3prime, f_seq, r_seq) %>% distinct()
-pchar <- pchar %>% mutate(gc_clamp = f_gc_clamp & r_gc_clamp, gc_3prime = f_gc_3prime, r_gc_3prime)
-vcf <- left_join(vcf, pchar)
+pchar$name  <- paste(pchar$chrom, pchar$start, sep = ':')
+pchar       <- pchar %>% select(snp_id = name, f_gc_clamp, r_gc_clamp, f_gc_3prime, r_gc_3prime, f_seq, r_seq) %>% distinct()
+pchar       <- pchar %>% mutate(gc_clamp = f_gc_clamp & r_gc_clamp, gc_3prime = f_gc_3prime, r_gc_3prime)
+vcf         <- left_join(vcf, pchar)
 ```
 
 ```
 ## Joining, by = "snp_id"
 ```
 
-
 Generate some variables, and group data by snp_id.
 
 
 ```r
-# Separate allele depth & genotype likelihoods
-
-vcf <- vcf %>% separate(GT, c("GT1", "GT2"), "/", convert = TRUE, remove = FALSE) %>%
-  separate(AD, c("AD1", "AD2"), ",", convert = TRUE, remove = FALSE) %>%
-	separate(PL, c("pl00", "pl01", "pl11"), convert = TRUE, remove = FALSE) %>%
-	rowwise() %>% mutate(gt = sum(GT1, GT2))
-```
-
-```
-## Warning: Expected 2 pieces. Missing pieces filled with `NA` in 600 rows [3901, 3902, 3903, 3904, 3905, 3906, 3907, 3908, 3909, 3910, 3911, 3912, 3913, 3914, 3915, 3916, 3917, 3918, 3919, 3920, ...].
-```
-
-```
-## Warning: Expected 3 pieces. Missing pieces filled with `NA` in 600 rows [3901, 3902, 3903, 3904, 3905, 3906, 3907, 3908, 3909, 3910, 3911, 3912, 3913, 3914, 3915, 3916, 3917, 3918, 3919, 3920, ...].
-```
-
-```r
-# Calc. likelihood ratio
-likelihood_ratio <- function(x) {
-  y <- 10^(-x/10)
-  max(y) / (sum(y) - max(y))
-}
-
-vcf <- vcf %>% rowwise() %>% mutate(lr = likelihood_ratio(c(pl00,pl01,pl11)))
-
-vcf$called <- vcf$GQ > 20
+vcf$called <- vcf$lr > 10
 # Group by snp_id, calc snp-level variables.
 
 snp_data <- vcf %>% 
   group_by(snp_id, CHROM, REF, ALT, template_size, pcr1_product, pcr2_product, gc_clamp, gc_3prime, f_gc_clamp, r_gc_clamp, f_gc_3prime, r_gc_3prime) %>% 
-  summarize(n_called = sum(called), n = n(), call_rate = n_called/n, AD1 = sum(AD1),
-	          AD2 = sum(AD2), totalDP = sum(DP), meanDP = mean(DP), medianDP = median(DP),
-						paa = sum(gt == 0 & called) / n_called, pAa = sum(gt == 1 & called) /  n_called, pAA = sum(gt == 2 & called) /  n_called)
-```
+  summarize(n_called = sum(called), n = n(), call_rate = n_called/n, totalDP = sum(DP), meanDP = mean(DP), medianDP = median(DP),
+  paa = sum(gt == 0) / n(), pAa = sum(gt == 1) / n(), pAA = sum(gt == 2) / n(), a1 = (2*sum(!is.na(gt))) - sum(gt, na.rm = TRUE), a2 = sum(gt, na.rm = TRUE))
 
-```
-## Warning: Grouping rowwise data frame strips rowwise nature
-```
+multiallelic <- snp_data %>% group_by(snp_id) %>% filter(n() > 1)
 
-```r
+snp_data <- snp_data %>% filter(!snp_id %in% multiallelic$snp_id)
+
 # Minor allele frequency
 
-getmaf <- function(ad1, ad2) {
-  if(ad1 == 0 || is.na(ad1) || ad2 == 0 || is.na(ad2)) {return(0)}
+getmaf <- function(a1, a2) {
+  if(a1 == 0 || is.na(a1) || a2 == 0 || is.na(a2)) {return(0)}
 
-  af1 <- ad1 / (ad1 + ad2)
+  af1 <- a1 / (a1 + a2)
   if(af1 > 0.5){
     return(1 - af1)
   } else {
@@ -191,33 +216,23 @@ getmaf <- function(ad1, ad2) {
   }
 }
 
-snp_data <- snp_data %>% rowwise() %>% mutate(maf = getmaf(AD1, AD2))
+snp_data <- snp_data %>% rowwise() %>% mutate(maf = getmaf(a1, a2))
 
 # Allele frequency
-getaf <- function(ad1, ad2) {
+getaf <- function(a1, a2) {
 
-  if(ad2 == 0 || is.na(ad2)) {return(0)}
-	if(ad1 == 0 || is.na(ad1)) {return(1)}
+  if(a2 == 0 || is.na(a2)) {return(0)}
+  if(a1 == 0 || is.na(a1)) {return(1)}
 
-  af1 <- ad1 / (ad1 + ad2)
+  af1 <- a1 / (a1 + a2)
 }
 
-snp_data <- snp_data %>% rowwise() %>% mutate(af = getaf(AD1, AD2))
+snp_data <- snp_data %>% rowwise() %>% mutate(af = getaf(a1, a2))
 
+sample_data <- vcf %>% group_by(sample, type, dna, Year, region, run_id) %>% summarise(n_called = sum(called), n = n(), call_rate = n_called/n, totalDP = sum(DP), meanDP = mean(DP), medianDP = median(DP))
 
-
-sample_data <- vcf %>% group_by(sample, type, dna, Year, region, run_id) %>% summarise(n_called = sum(called), n = n(), call_rate = n_called/n, AD1 = sum(AD1),
-	          AD2 = sum(AD2), totalDP = sum(DP), meanDP = mean(DP), medianDP = median(DP))
-```
-
-```
-## Warning: Grouping rowwise data frame strips rowwise nature
-```
-
-```r
 sample_data <- sample_data %>% group_by(run_id) %>% mutate(totalRunDP = sum(totalDP)) %>% mutate(scaledDP = totalDP / totalRunDP)
 ```
-
 ## Figure 1. SNP Depth
 
 
@@ -225,6 +240,10 @@ sample_data <- sample_data %>% group_by(run_id) %>% mutate(totalRunDP = sum(tota
 ```r
 vcf$SNPID <- factor(vcf$snp_id, levels = snp_data$snp_id[order(snp_data$meanDP)])
 ggplot(vcf, aes(x = SNPID, y = DP)) + geom_point() + xlab("SNP ID") + ylab("Depth") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```
+## Warning: Removed 1289 rows containing missing values (geom_point).
 ```
 
 ![plot of chunk unnamed-chunk-3](figure/unnamed-chunk-3-1.png)
@@ -235,6 +254,10 @@ ggplot(vcf, aes(x = SNPID, y = DP)) + geom_point() + xlab("SNP ID") + ylab("Dept
 ```r
 snp_data$SNPID <- factor(snp_data$snp_id, levels = snp_data$snp_id[order(snp_data$meanDP)])
 ggplot(snp_data, aes(x = SNPID, y = meanDP)) + geom_point() + xlab("SNP ID") + ylab("Mean Depth") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```
+## Warning: Removed 4 rows containing missing values (geom_point).
 ```
 
 ![plot of chunk unnamed-chunk-4](figure/unnamed-chunk-4-1.png)
@@ -272,6 +295,14 @@ ggplot(snp_data, aes(x = af)) +
 	xlab("Allele a frequency") + ylab("Genotype frequency")
 ```
 
+```
+## Warning: Removed 178 rows containing missing values (geom_point).
+
+## Warning: Removed 178 rows containing missing values (geom_point).
+
+## Warning: Removed 178 rows containing missing values (geom_point).
+```
+
 ![plot of chunk unnamed-chunk-6](figure/unnamed-chunk-6-1.png)
 
 ## Figure 5. Call rate x heterozygosity rate
@@ -281,10 +312,18 @@ ggplot(snp_data, aes(x = af)) +
 ggplot(snp_data, aes(x = pAa, y = call_rate)) + geom_point()
 ```
 
+```
+## Warning: Removed 178 rows containing missing values (geom_point).
+```
+
 ![plot of chunk unnamed-chunk-7](figure/unnamed-chunk-7-1.png)
 
 ```r
 ggplot(snp_data, aes(x = maf, y = call_rate)) + geom_point()
+```
+
+```
+## Warning: Removed 44 rows containing missing values (geom_point).
 ```
 
 ![plot of chunk unnamed-chunk-7](figure/unnamed-chunk-7-2.png)
@@ -298,6 +337,14 @@ ggplot(snp_data, aes(x = pcr1_product, y = call_rate)) + geom_point() + geom_smo
 
 ```
 ## `geom_smooth()` using formula 'y ~ x'
+```
+
+```
+## Warning: Removed 44 rows containing non-finite values (stat_smooth).
+```
+
+```
+## Warning: Removed 44 rows containing missing values (geom_point).
 ```
 
 ![plot of chunk unnamed-chunk-8](figure/unnamed-chunk-8-1.png)
@@ -314,27 +361,27 @@ summary(glm1)
 ##    Data: vcf
 ## 
 ##      AIC      BIC   logLik deviance df.resid 
-##  33561.1  33586.7 -16777.5  33555.1    37797 
+## 115397.5 115426.9 -57695.8 115391.5   134222 
 ## 
 ## Scaled residuals: 
 ##      Min       1Q   Median       3Q      Max 
-## -10.9097  -0.4737  -0.1357   0.4941   8.3407 
+## -13.6568  -0.4487  -0.0798   0.4855  12.4509 
 ## 
 ## Random effects:
 ##  Groups Name        Variance Std.Dev.
-##  sample (Intercept) 4.288    2.071   
-## Number of obs: 37800, groups:  sample, 300
+##  sample (Intercept) 5.062    2.25    
+## Number of obs: 134225, groups:  sample, 1049
 ## 
 ## Fixed effects:
 ##                        Estimate Std. Error z value Pr(>|z|)    
-## (Intercept)            -0.16309    0.12078   -1.35    0.177    
-## I(scale(pcr1_product)) -0.44554    0.01431  -31.12   <2e-16 ***
+## (Intercept)            -0.26864    0.07005  -3.835 0.000126 ***
+## I(scale(pcr1_product)) -0.69152    0.00817 -84.641  < 2e-16 ***
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 ## 
 ## Correlation of Fixed Effects:
 ##             (Intr)
-## I(scl(p1_)) 0.003
+## I(scl(p1_)) 0.005
 ```
 
 
@@ -343,6 +390,10 @@ summary(glm1)
 
 ```r
 ggplot(snp_data, aes(x = pcr1_product, y = meanDP)) + geom_point() + ylab("Mean depth") + xlab("PCR 1 product size")
+```
+
+```
+## Warning: Removed 4 rows containing missing values (geom_point).
 ```
 
 ![plot of chunk unnamed-chunk-9](figure/unnamed-chunk-9-1.png)
@@ -355,6 +406,10 @@ ggplot(snp_data, aes(x = pcr1_product, y = meanDP)) + geom_point() + ylab("Mean 
 ggplot(snp_data, aes(x = meanDP, y = call_rate)) + geom_point() + xlab("Mean depth") + ylab("Call rate")
 ```
 
+```
+## Warning: Removed 44 rows containing missing values (geom_point).
+```
+
 ![plot of chunk unnamed-chunk-10](figure/unnamed-chunk-10-1.png)
 
 
@@ -363,6 +418,10 @@ ggplot(snp_data, aes(x = meanDP, y = call_rate)) + geom_point() + xlab("Mean dep
 
 ```r
 ggplot(sample_data, aes(x = type, y = call_rate)) + geom_boxplot()
+```
+
+```
+## Warning: Removed 1049 rows containing non-finite values (stat_boxplot).
 ```
 
 ![plot of chunk unnamed-chunk-11](figure/unnamed-chunk-11-1.png)
@@ -383,16 +442,28 @@ GC clamp = TRUE if 2 or fewer GC bases in 3 prime end.
 ggplot(snp_data, aes(x = gc_clamp, y = call_rate)) + geom_boxplot() + ggtitle("GC Clamp")
 ```
 
+```
+## Warning: Removed 44 rows containing non-finite values (stat_boxplot).
+```
+
 ![plot of chunk unnamed-chunk-12](figure/unnamed-chunk-12-1.png)
 
 ```r
 ggplot(snp_data, aes(x = f_gc_clamp, y = call_rate)) + geom_boxplot() + ggtitle("Forward GC Clamp")
 ```
 
+```
+## Warning: Removed 44 rows containing non-finite values (stat_boxplot).
+```
+
 ![plot of chunk unnamed-chunk-12](figure/unnamed-chunk-12-2.png)
 
 ```r
 ggplot(snp_data, aes(x = r_gc_clamp, y = call_rate)) + geom_boxplot() + ggtitle("Reverse GC Clamp")
+```
+
+```
+## Warning: Removed 44 rows containing non-finite values (stat_boxplot).
 ```
 
 ![plot of chunk unnamed-chunk-12](figure/unnamed-chunk-12-3.png)
@@ -417,16 +488,28 @@ TRUE if GC is last base at 3prime end.
 ggplot(snp_data, aes(x = gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle("GC 3prime")
 ```
 
+```
+## Warning: Removed 44 rows containing non-finite values (stat_boxplot).
+```
+
 ![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13-1.png)
 
 ```r
 ggplot(snp_data, aes(x = f_gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle("Forward GC 3prime")
 ```
 
+```
+## Warning: Removed 44 rows containing non-finite values (stat_boxplot).
+```
+
 ![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13-2.png)
 
 ```r
 ggplot(snp_data, aes(x = r_gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle("Reverse GC 3prime")
+```
+
+```
+## Warning: Removed 44 rows containing non-finite values (stat_boxplot).
 ```
 
 ![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13-3.png)

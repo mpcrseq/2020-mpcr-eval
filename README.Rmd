@@ -1,15 +1,4 @@
----
-output:
-  html_document:
-    fig_width: 8
-    fig_height: 6
-  md_document:
-    fig_width: 8
-    fig_height: 6
-fig_width: 8 
-fig_height: 6
-cache: TRUE
----
+
 # mpcrseq exploratory
 
 Import data and join amplicon size data with genotyping data.
@@ -18,43 +7,18 @@ Import data and join amplicon size data with genotyping data.
 library(tidyverse)
 library(lme4)
 
-vcf	               <- read_csv("vcf_129snp_long.csv")
-s1s2_product_sizes <- read_tsv("set12_product_sizes.tsv")
+vcf_129 <- read_csv("vcf_129snp_long.csv")
+vcf_av  <- read_tsv("vcf_av_snps_long.txt")
 
-s1s2$snp_id <- gsub('-500','', s1s2$snp_id)
+vcf_129 <- vcf_129 %>% select(CHROM, POS, REF, ALT, sample = SAMPLE_NAME_IN_RUN, GT, PL, DP, AD, GQ)
+vcf_av  <- vcf_av %>% select(CHROM, POS, REF, ALT, sample, GT, PL, DP, AD, GQ)
+vcf     <- rbind(vcf_129, vcf_av)
 
-vcf$snp_id <- paste(vcf$CHROM, vcf$POS, sep = ":")
-
-vcf <- left_join(s1s2, vcf)
-vcf <- vcf %>% filter(!is.na(CHROM))
-
-vcf$sample <- vcf$SAMPLE_NAME_IN_RUN
-
-metadata <- read_csv('big_bam_list.csv')
-
-vcf <- left_join(vcf, metadata)
-
-
-pchar <- read_tsv('pchar.tsv')
-pchar$start <- as.integer(pchar$start)
-pchar$name <- paste(pchar$chrom, pchar$start, sep = ':')
-pchar <- pchar %>% select(snp_id = name, f_gc_clamp, r_gc_clamp, f_gc_3prime, r_gc_3prime, f_seq, r_seq) %>% distinct()
-pchar <- pchar %>% mutate(gc_clamp = f_gc_clamp & r_gc_clamp, gc_3prime = f_gc_3prime, r_gc_3prime)
-vcf <- left_join(vcf, pchar)
-
-```
-
-
-Generate some variables, and group data by snp_id.
-
-```{r}
 # Separate allele depth & genotype likelihoods
-
 vcf <- vcf %>% separate(GT, c("GT1", "GT2"), "/", convert = TRUE, remove = FALSE) %>%
   separate(AD, c("AD1", "AD2"), ",", convert = TRUE, remove = FALSE) %>%
-	separate(PL, c("pl00", "pl01", "pl11"), convert = TRUE, remove = FALSE) %>%
-	rowwise() %>% mutate(gt = sum(GT1, GT2))
-
+  separate(PL, c("pl00", "pl01", "pl11"), convert = TRUE, remove = FALSE) %>%
+  rowwise() %>% mutate(gt = sum(GT1, GT2))
 
 # Calc. likelihood ratio
 likelihood_ratio <- function(x) {
@@ -64,22 +28,65 @@ likelihood_ratio <- function(x) {
 
 vcf <- vcf %>% rowwise() %>% mutate(lr = likelihood_ratio(c(pl00,pl01,pl11)))
 
-vcf$called <- vcf$GQ > 20
+
+
+
+load("run0802.RData")
+load("run1012.RData")
+
+r1 <- run0802$run_x_sample_snp_data
+r2 <- run1012$run_x_sample_snp_data
+
+r12 <- rbind(r1, r2)
+
+r12 <- r12 %>% select(CHROM = chrom, POS = stop, REF = ref, ALT = alt, sample, gt, pl00, pl01, pl11, DP = dp, gt, lr)
+
+vcf <- vcf %>% select(CHROM, POS, REF, ALT, sample, gt, pl00, pl01, pl11, DP, gt, lr)
+
+
+vcf <- rbind(r12, vcf)
+
+s1s2        <- read_tsv("set12_product_sizes.tsv")
+s1s2$snp_id <- gsub('-500','', s1s2$snp_id)
+
+vcf$snp_id <- paste(vcf$CHROM, vcf$POS, sep = ":")
+vcf        <- left_join(s1s2, vcf)
+vcf        <- vcf %>% filter(!is.na(CHROM))
+
+metadata <- read_csv('big_bam_list.csv')
+vcf      <- left_join(vcf, metadata)
+
+pchar       <- read_tsv('pchar.tsv')
+pchar$start <- as.integer(pchar$start)
+pchar$name  <- paste(pchar$chrom, pchar$start, sep = ':')
+pchar       <- pchar %>% select(snp_id = name, f_gc_clamp, r_gc_clamp, f_gc_3prime, r_gc_3prime, f_seq, r_seq) %>% distinct()
+pchar       <- pchar %>% mutate(gc_clamp = f_gc_clamp & r_gc_clamp, gc_3prime = f_gc_3prime, r_gc_3prime)
+vcf         <- left_join(vcf, pchar)
+
+```
+
+Generate some variables, and group data by snp_id.
+
+```{r}
+
+vcf$called <- vcf$lr > 10
 # Group by snp_id, calc snp-level variables.
 
 snp_data <- vcf %>% 
   group_by(snp_id, CHROM, REF, ALT, template_size, pcr1_product, pcr2_product, gc_clamp, gc_3prime, f_gc_clamp, r_gc_clamp, f_gc_3prime, r_gc_3prime) %>% 
-  summarize(n_called = sum(called), n = n(), call_rate = n_called/n, AD1 = sum(AD1),
-	          AD2 = sum(AD2), totalDP = sum(DP), meanDP = mean(DP), medianDP = median(DP),
-						paa = sum(gt == 0 & called) / n_called, pAa = sum(gt == 1 & called) /  n_called, pAA = sum(gt == 2 & called) /  n_called)
+  summarize(n_called = sum(called), n = n(), call_rate = n_called/n, totalDP = sum(DP), meanDP = mean(DP), medianDP = median(DP),
+  paa = sum(gt == 0) / n(), pAa = sum(gt == 1) / n(), pAA = sum(gt == 2) / n(), a1 = (2*sum(!is.na(gt))) - sum(gt, na.rm = TRUE), a2 = sum(gt, na.rm = TRUE))
 
+multiallelic <- snp_data %>% group_by(snp_id) %>% filter(n() > 1)
+
+snp_data <- snp_data %>% filter(!snp_id %in% multiallelic$snp_id)
 
 # Minor allele frequency
 
-getmaf <- function(ad1, ad2) {
-  if(ad1 == 0 || is.na(ad1) || ad2 == 0 || is.na(ad2)) {return(0)}
+getmaf <- function(a1, a2) {
+  if(a1 == 0 || is.na(a1) || a2 == 0 || is.na(a2)) {return(0)}
 
-  af1 <- ad1 / (ad1 + ad2)
+  af1 <- a1 / (a1 + a2)
   if(af1 > 0.5){
     return(1 - af1)
   } else {
@@ -87,29 +94,25 @@ getmaf <- function(ad1, ad2) {
   }
 }
 
-snp_data <- snp_data %>% rowwise() %>% mutate(maf = getmaf(AD1, AD2))
+snp_data <- snp_data %>% rowwise() %>% mutate(maf = getmaf(a1, a2))
 
 # Allele frequency
-getaf <- function(ad1, ad2) {
+getaf <- function(a1, a2) {
 
-  if(ad2 == 0 || is.na(ad2)) {return(0)}
-	if(ad1 == 0 || is.na(ad1)) {return(1)}
+  if(a2 == 0 || is.na(a2)) {return(0)}
+  if(a1 == 0 || is.na(a1)) {return(1)}
 
-  af1 <- ad1 / (ad1 + ad2)
+  af1 <- a1 / (a1 + a2)
 }
 
-snp_data <- snp_data %>% rowwise() %>% mutate(af = getaf(AD1, AD2))
+snp_data <- snp_data %>% rowwise() %>% mutate(af = getaf(a1, a2))
 
-
-
-sample_data <- vcf %>% group_by(sample, type, dna, Year, region, run_id) %>% summarise(n_called = sum(called), n = n(), call_rate = n_called/n, AD1 = sum(AD1),
-	          AD2 = sum(AD2), totalDP = sum(DP), meanDP = mean(DP), medianDP = median(DP))
+sample_data <- vcf %>% group_by(sample, type, dna, Year, region, run_id) %>% summarise(n_called = sum(called), n = n(), call_rate = n_called/n, totalDP = sum(DP), meanDP = mean(DP), medianDP = median(DP))
 
 sample_data <- sample_data %>% group_by(run_id) %>% mutate(totalRunDP = sum(totalDP)) %>% mutate(scaledDP = totalDP / totalRunDP)
 
 
 ```
-
 ## Figure 1. SNP Depth
 
 
@@ -138,8 +141,6 @@ ggplot(snp_data, aes(x = maf)) + geom_histogram(bins = 20)
 ## Figure 4. Genotype frequencies
 
 ```{r}
-
-
 p <- seq(0,1,length.out = nrow(snp_data))
 q <- 1-p
 pq = (1-(p^2)-(q^2))/2
@@ -199,7 +200,6 @@ ggplot(snp_data, aes(x = meanDP, y = call_rate)) + geom_point() + xlab("Mean dep
 ## Figure 9. Sample type x Call rate
 
 ```{r}
-
 ggplot(sample_data, aes(x = type, y = call_rate)) + geom_boxplot()
 
 ```
@@ -241,7 +241,6 @@ TRUE if GC is last base at 3prime end.
 
 
 ```{r}
-
 ggplot(snp_data, aes(x = gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle("GC 3prime")
 ggplot(snp_data, aes(x = f_gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle("Forward GC 3prime")
 ggplot(snp_data, aes(x = r_gc_3prime, y = call_rate)) + geom_boxplot() + ggtitle("Reverse GC 3prime")
